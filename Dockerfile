@@ -57,7 +57,7 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
 
 # update and install dependencies
 # hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update || true && apt-get install -y --no-install-recommends \
     procps \
     wget \
     gettext-base \
@@ -72,7 +72,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-venv python3-pip \
     && (apt-get install -y --no-install-recommends libicu76 || apt-get install -y --no-install-recommends libicu72 || apt-get install -y --no-install-recommends libicu67) \
     && (apt-get install -y --no-install-recommends libsdl3-0 || apt-get install -y --no-install-recommends libsdl3-0-0) \
-    && ([ "${TARGETARCH}" = "amd64" ] && apt-get install -y --no-install-recommends cabextract gnupg winbind xvfb xauth winehq-${WINE_BRANCH}) \
+    && ([ "${TARGETARCH}" = "amd64" ] && apt-get install -y --no-install-recommends cabextract gnupg winbind xvfb xauth winehq-${WINE_BRANCH} || true) \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
