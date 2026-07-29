@@ -108,7 +108,14 @@ if [ "${platform}" = "windows" ]; then
         LogError "Windows server platform is not supported on arm64."
         exit 1
     fi
-    STARTCOMMAND=("wine" "/palworld/PalServer-Win64-Shipping.exe")
+    server_binary="$(PalworldServerBinaryPath)"
+
+    if ! fileExists "${server_binary}"; then
+        LogError "Server Not Installed Properly"
+        exit 1
+    fi
+
+    STARTCOMMAND=("wine" "${server_binary}")
 else
     STARTCOMMAND=("./PalServer.sh")
 fi
@@ -128,20 +135,9 @@ if [ "$ServerInstalled" == 0 ] && [ "${UPDATE_ON_BOOT,,}" == true ]; then
 fi
 
 #Validate Installation
-if [ "${platform}" = "windows" ]; then
-    if ! command -v wine > /dev/null 2>&1; then
-        LogError "wine binary is not installed in this image. Rebuild image with Wine dependencies."
-        exit 1
-    fi
-    if ! fileExists "/palworld/PalServer-Win64-Shipping.exe"; then
-        LogError "PalServer-Win64-Shipping.exe not found. Server Not Installed Properly"
-        exit 1
-    fi
-else
-    if ! fileExists "${STARTCOMMAND[0]}"; then
-        LogError "Server Not Installed Properly"
-        exit 1
-    fi
+if ! fileExists "${STARTCOMMAND[0]}"; then
+    LogError "Server Not Installed Properly"
+    exit 1
 fi
 
 if [ "${platform}" = "linux" ]; then
