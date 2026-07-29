@@ -128,9 +128,20 @@ if [ "$ServerInstalled" == 0 ] && [ "${UPDATE_ON_BOOT,,}" == true ]; then
 fi
 
 #Validate Installation
-if ! fileExists "${STARTCOMMAND[0]}"; then
-    LogError "Server Not Installed Properly"
-    exit 1
+if [ "${platform}" = "windows" ]; then
+    if ! command -v wine > /dev/null 2>&1; then
+        LogError "wine binary is not installed in this image. Rebuild image with Wine dependencies."
+        exit 1
+    fi
+    if ! fileExists "/palworld/PalServer-Win64-Shipping.exe"; then
+        LogError "PalServer-Win64-Shipping.exe not found. Server Not Installed Properly"
+        exit 1
+    fi
+else
+    if ! fileExists "${STARTCOMMAND[0]}"; then
+        LogError "Server Not Installed Properly"
+        exit 1
+    fi
 fi
 
 if [ "${platform}" = "linux" ]; then
