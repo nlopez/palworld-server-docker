@@ -43,6 +43,7 @@ jobs:
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
             type=semver,pattern=v{{major}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
           flavor: latest=true
 
       - name: Docker - Build / Push
