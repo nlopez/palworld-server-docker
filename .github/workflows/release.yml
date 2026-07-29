@@ -4,6 +4,11 @@ on:  # yamllint disable-line rule:truthy
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v2026.07.29)'
+        required: true
+        type: string
 
 jobs:
   # Builds the Dockerfile and pushes it to GHCR
