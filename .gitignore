@@ -4,3 +4,4 @@ palworld
 values*.yaml
 .env
 .vscode
+/examples/mods/Steam

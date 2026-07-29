@@ -1,0 +1,64 @@
+services:
+  palworld:
+    extends:
+      file: ../../compose.yaml
+      service: palworld
+    build: ../../
+    environment:
+      SERVER_NAME: "palworld-server-docker/examples/mods"
+      NOSTEAM: true
+      SERVER_PLATFORM: Windows
+      WORKSHOP_MODS_DEBUG: false
+
+      # ------------------------------------------------------------
+      # MOD install method A: Steam Workshop IDs in env var
+      # - Comma-separated workshop IDs
+      # - Works with periodic sync by WORKSHOP_MOD_UPDATE_CRON
+      # ------------------------------------------------------------
+      # WORKSHOP_MOD_IDS: "3625280368,3625287786"
+      # WORKSHOP_MOD_UPDATE_CRON: "0 */6 * * *"
+
+      # ------------------------------------------------------------
+      # MOD install method B: workshop-mods.txt file
+      # - Place IDs in /palworld/workshop-mods.txt
+      # - Leave WORKSHOP_MOD_IDS empty when file-managed
+      # ------------------------------------------------------------
+      WORKSHOP_MOD_IDS: ""
+      WORKSHOP_MOD_UPDATE_CRON: "0 */6 * * *"
+
+      # ------------------------------------------------------------
+      # MOD install method C: NativeMods (manual mod folders)
+      # - Put extracted mods under:
+      #   ./palworld/Mods/NativeMods/<mod_name>/...
+      # - install-mods.sh auto-deploys these on startup/sync
+      # ------------------------------------------------------------
+
+      # ------------------------------------------------------------
+      # Optional UE4SS helper (Phase 1 implementation)
+      # - true: download zip and extract to Mods/NativeMods/ue4ss-experimental
+      # - false: no automatic UE4SS download
+      # ------------------------------------------------------------
+      INSTALL_UE4SS_EXPERIMENTAL: true
+      UE4SS_EXPERIMENTAL_URL: "https://github.com/Okaetsu/RE-UE4SS/releases/download/experimental-palworld/UE4SS-Palworld.zip"
+
+      # Runtime mods layout:
+      # - legacy:   Pal/Binaries/Win64/Mods
+      # - ue4ss_dir: Pal/Binaries/Win64/ue4ss/Mods
+      UE4SS_MODS_LAYOUT: ue4ss_dir
+
+      # Remove old UE4SS runtime artifacts before redeploy
+      UE4SS_CLEANUP_LEGACY: true
+
+      # If workshop mods require account auth:
+      # 1) run ./steam-login.sh once before startup
+      # 2) keep Steam session volume persisted
+      # 3) provide only STEAM_USERNAME (no password in compose)
+      STEAM_USERNAME: "${STEAM_USERNAME:-anonymous}"
+      STEAM_SESSION_VOLUME: "${STEAM_SESSION_VOLUME:-./Steam}"
+
+    volumes:
+      - ../../palworld:/palworld/
+      - ./workshop-mods.txt:/opt/palworld.override/workshop-mods.txt:ro
+      # For Steam Guard cache, if using registered content mods.
+      - ${STEAM_SESSION_VOLUME:-./Steam}:/home/steam/Steam/
+

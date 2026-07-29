@@ -32,6 +32,11 @@ fi
 
 mkdir -p /palworld/backups
 
+if [ -d "/opt/palworld.override" ]; then
+    LogInfo "Applying /opt/palworld.override to /palworld"
+    cp -aRf /opt/palworld.override/. /palworld/
+fi
+
 if [[ "$(id -u)" -eq 0 ]] && [[ "$(id -g)" -eq 0 ]]; then
     if [[ "${PUID}" -ne 0 ]] && [[ "${PGID}" -ne 0 ]]; then
         LogAction "EXECUTING USERMOD"
@@ -65,7 +70,9 @@ term_handler() {
 
     if ! shutdown_server; then
         # Does not save
-        kill -SIGTERM "$(pidof PalServer-Linux-Shipping)"
+        if server_pid="$(PalworldServerPid)"; then
+            kill -SIGTERM "${server_pid}"
+        fi
     fi
 
     tail --pid="$killpid" -f 2>/dev/null
@@ -81,6 +88,7 @@ fi
 # Process ID of su
 killpid="$!"
 wait "$killpid"
+child_rc=$?
 
 mapfile -t backup_pids < <(pgrep backup)
 if [ "${#backup_pids[@]}" -ne 0 ]; then
@@ -97,3 +105,5 @@ if [ "${#restore_pids[@]}" -ne 0 ]; then
         tail --pid="$pid" -f 2>/dev/null
     done
 fi
+
+exit "$child_rc"

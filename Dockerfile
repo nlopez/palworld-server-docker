@@ -26,6 +26,7 @@ ARG TARGETARCH
 # and hadolint isn't aware of those.
 # hadolint ignore=DL3006
 FROM base-${TARGETARCH}
+ARG TARGETARCH
 
 LABEL maintainer="thijs@loef.dev" \
       name="thijsvanloef/palworld-server-docker" \
@@ -44,6 +45,15 @@ ARG SUPERCRONIC_SHA1SUM_AMD64="5bcefed628e32adc08e32634db2d10e9230dbca0"
 ARG SUPERCRONIC_VERSION="0.2.46"
 ARG DEPOT_DOWNLOADER_VERSION="3.4.0"
 ARG KNOCK_VERSION="0.8.1"
+ARG WINE_BRANCH="stable"
+
+# install wine source list for amd64 only
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        dpkg --add-architecture i386 \
+        && mkdir -pm755 /etc/apt/keyrings \
+        && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /etc/apt/keyrings/winehq-archive.key \
+        && curl -fsSL https://dl.winehq.org/wine-builds/debian/dists/trixie/winehq-trixie.sources -o /etc/apt/sources.list.d/winehq-trixie.sources ; \
+    fi
 
 # update and install dependencies
 # hadolint ignore=DL3008
@@ -56,11 +66,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     netcat-traditional \
     unzip \
+    iproute2 \
     libcap2-bin libpcap0.8 \
     ca-certificates \
     python3 python3-venv python3-pip \
     && (apt-get install -y --no-install-recommends libicu76 || apt-get install -y --no-install-recommends libicu72 || apt-get install -y --no-install-recommends libicu67) \
     && (apt-get install -y --no-install-recommends libsdl3-0 || apt-get install -y --no-install-recommends libsdl3-0-0) \
+    && ([ "${TARGETARCH}" = "amd64" ] && apt-get install -y --no-install-recommends cabextract gnupg winbind xvfb xauth winehq-${WINE_BRANCH}) \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -75,7 +87,6 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 COPY --from=rcon-cli_builder /build/gorcon /usr/bin/rcon-cli
 
-ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
         "amd64") SUPERCRONIC_SHA1SUM=${SUPERCRONIC_SHA1SUM_AMD64} ;; \
         "arm64") SUPERCRONIC_SHA1SUM=${SUPERCRONIC_SHA1SUM_ARM64} ;; \
@@ -95,6 +106,12 @@ RUN case "${TARGETARCH}" in \
     && chmod +x DepotDownloader \
     && mv DepotDownloader /usr/local/bin/DepotDownloader
 
+# install winetricks for amd64 only
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        wget -nv -O /usr/local/bin/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
+        && chmod +x /usr/local/bin/winetricks ; \
+    fi
+
 # install patched knockd (as same as https://github.com/itzg/docker-minecraft-server/blob/master/build/ubuntu/install-packages.sh)
 RUN wget --progress=dot:giga https://github.com/Metalcape/knock/releases/download/0.8.1/knock-${KNOCK_VERSION}-${TARGETARCH}.tar.gz -O /tmp/knock.tar.gz && \
     tar -xf /tmp/knock.tar.gz -C /usr/local/ && rm /tmp/knock.tar.gz && \
@@ -104,6 +121,15 @@ RUN wget --progress=dot:giga https://github.com/Metalcape/knock/releases/downloa
 
 # hadolint ignore=DL3044
 ENV HOME=/home/steam \
+    SERVER_PLATFORM=Linux \
+    SERVER_RUNTIME= \
+    WORKSHOP_MOD_IDS= \
+    WORKSHOP_MOD_UPDATE_CRON= \
+    WORKSHOP_MODS_DEBUG=false \
+    INSTALL_UE4SS_EXPERIMENTAL=false \
+    UE4SS_EXPERIMENTAL_URL="https://github.com/Okaetsu/RE-UE4SS/releases/download/experimental-palworld/UE4SS-Palworld.zip" \
+    UE4SS_MODS_LAYOUT=legacy \
+    UE4SS_CLEANUP_LEGACY=true \
     PORT= \
     PUID=1000 \
     PGID=1000 \
@@ -138,7 +164,8 @@ ENV HOME=/home/steam \
     AUTO_PAUSE_TIMEOUT_EST=180 \
     AUTO_PAUSE_LOG=true \
     AUTO_PAUSE_DEBUG=false \
-    DISCORD_SUPPRESS_NOTIFICATIONS= \
+    AUTO_PAUSE_KNOCK_INTERFACES="auto" \
+    DISCORD_SUPPRESS_NOTIFICATIONS=\
     DISCORD_WEBHOOK_URL= \
     DISCORD_CONNECT_TIMEOUT=30 \
     DISCORD_MAX_TIMEOUT=30 \
@@ -224,6 +251,10 @@ RUN mkdir -p /home/steam/.mitmproxy && \
     mv ca.crt /usr/local/share/ca-certificates/mitmproxy.crt && \
     update-ca-certificates
 
+# mods-update script for updating workshop mods
+RUN chmod +x /home/steam/server/mods/*.sh && \
+    ln -sf /home/steam/server/mods/update.sh /usr/local/bin/mods-update
+
 WORKDIR /home/steam/server
 
 # Make GIT_VERSION_TAG file to be able to check the version
@@ -237,7 +268,7 @@ RUN touch rcon.yaml crontab && \
     chown steam:steam -R /home/steam/server
 
 HEALTHCHECK --start-period=5m \
-    CMD pgrep "PalServer-Linux" > /dev/null || exit 1
+    CMD pgrep -f "PalServer-Linux|PalServer-Win64-Shipping" > /dev/null || exit 1
 
 EXPOSE ${PORT} ${RCON_PORT}
 ENTRYPOINT ["/home/steam/server/init.sh"]
