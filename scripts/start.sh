@@ -102,22 +102,9 @@ ensure_windows_runtime() {
     fi
 }
 
-if [ "${platform}" = "windows" ]; then
-    ensure_windows_runtime
-    if [ "$architecture" == "arm64" ]; then
-        LogError "Windows server platform is not supported on arm64."
-        exit 1
-    fi
-    server_binary="$(PalworldServerBinaryPath)"
-
-    if ! fileExists "${server_binary}"; then
-        LogError "Server Not Installed Properly"
-        exit 1
-    fi
-
-    STARTCOMMAND=("wine" "${server_binary}")
-else
-    STARTCOMMAND=("./PalServer.sh")
+if [ "${platform}" = "windows" ] && [ "${architecture}" = "arm64" ]; then
+    LogError "SERVER_PLATFORM=Windows is not supported on arm64. Use SERVER_PLATFORM=Linux on arm64 hosts."
+    exit 1
 fi
 
 IsInstalled
@@ -130,14 +117,46 @@ fi
 
 # Always update on boot even if the server is installed, to prevent appmanifest issues
 if [ "$ServerInstalled" == 0 ] && [ "${UPDATE_ON_BOOT,,}" == true ]; then
-    rm /palworld/steamapps/appmanifest_2394010.acf
+    rm -f /palworld/steamapps/appmanifest_2394010.acf
     InstallServer
 fi
 
+STARTCOMMAND=()
+STARTCOMMAND_NOARGS=()
+
+if [ "${platform}" = "windows" ]; then
+    ensure_windows_runtime
+    server_binary="$(PalworldServerBinaryPath)"
+
+    if ! fileExists "${server_binary}"; then
+        LogError "Server Not Installed Properly"
+        exit 1
+    fi
+
+    STARTCOMMAND=("wine" "${server_binary}")
+
+    STARTCOMMAND_NOARGS=("${STARTCOMMAND[@]}")
+else
+    STARTCOMMAND=("./PalServer.sh")
+    STARTCOMMAND_NOARGS=("./PalServer.sh")
+fi
+
 #Validate Installation
-if ! fileExists "${STARTCOMMAND[0]}"; then
+if [ "${platform}" = "linux" ] && ! fileExists "${STARTCOMMAND[0]}"; then
     LogError "Server Not Installed Properly"
     exit 1
+fi
+
+# Check if the architecture is arm64
+if [ "${platform}" = "linux" ] && [ "$architecture" == "arm64" ]; then
+    # create an arm64 version of ./PalServer.sh
+
+    cp ./PalServer.sh ./PalServer-arm64.sh
+
+    sed -i "s|\(\"\$UE_PROJECT_ROOT\/Pal\/Binaries\/Linux\/PalServer-Linux-Shipping\" Pal \"\$@\"\)|LD_LIBRARY_PATH=/home/steam/steamcmd/linux64:\$LD_LIBRARY_PATH /usr/local/bin/box64 \1|" ./PalServer-arm64.sh
+    chmod +x ./PalServer-arm64.sh
+    STARTCOMMAND=("./PalServer-arm64.sh")
+    STARTCOMMAND_NOARGS=("./PalServer-arm64.sh")
 fi
 
 if [ "${platform}" = "linux" ]; then
@@ -200,17 +219,13 @@ container_version_check
 if [ "${DISABLE_GENERATE_SETTINGS,,}" = true ]; then
   LogAction "GENERATING CONFIG"
   LogWarn "Env vars will not be applied due to DISABLE_GENERATE_SETTINGS being set to TRUE!"
+  mkdir -p "${settings_dir}" || exit
 
   # shellcheck disable=SC2143
   if [ ! "$(grep -s '[^[:space:]]' "${settings_file}")" ]; then
       LogAction "GENERATING CONFIG"
-      mkdir -p "${settings_dir}" || exit
       # Server will generate all ini files after first run.
-      if [ "${platform}" = "linux" ]; then
-          timeout --preserve-status 15s "${STARTCOMMAND[@]}" 1> /dev/null
-      else
-          timeout --preserve-status 15s "${STARTCOMMAND[@]}" 1> /dev/null
-      fi
+      timeout --preserve-status 15s "${STARTCOMMAND_NOARGS[@]}" 1> /dev/null
 
       # Wait for shutdown
       sleep 5
